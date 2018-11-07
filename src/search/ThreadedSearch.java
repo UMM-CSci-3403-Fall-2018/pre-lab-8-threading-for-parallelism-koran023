@@ -49,20 +49,63 @@ public class ThreadedSearch<T> implements Searcher<T>, Runnable {
          * threads, wait for them to all terminate, and then return the answer
          * in the shared `Answer` instance.
          */
-        return false;
+
+        Answer answer = new Answer();
+
+        // Create instances of ThreadedSearch
+        ThreadedSearch[] searchers = new ThreadedSearch[numThreads];
+
+        int chunkPos = 0;
+        int chunkSize = list.size() / numThreads;
+        for (int i = 0; i < numThreads; i++) {
+            // Instantiate ith searcher to search on its own chunk
+            searchers[i] = new ThreadedSearch(target, list, chunkPos, chunkPos + chunkSize, answer);
+
+            chunkPos += chunkSize;
+        }
+
+        // Spin up dem threads
+        Thread[] threads = new Thread[numThreads];
+
+        for (int i = 0; i < numThreads; i++) {
+            if (!answer.getAnswer()) {
+                // Create and start thread i
+                threads[i] = new Thread(searchers[i]);
+                threads[i].start();
+            } else {
+                // quit early if a thread finds the target in its chunk...no need to keep checking!
+                break;
+            }
+
+        }
+
+        // Wrap it all up after threads are done
+        for (Thread thread : threads) {
+            if (thread != null) {
+                thread.join();
+            }
+        }
+        return answer.getAnswer();
     }
 
     public void run() {
-        // Delete this `throw` when you actually implement this method.
-        throw new UnsupportedOperationException();
+
+        boolean contained = list.subList(begin, end).contains(target);
+        if (contained) {
+            answer.setAnswer(true);
+        }
     }
 
     private class Answer {
         private boolean answer = false;
 
+        public Answer() {
+
+        }
+
         // In a more general setting you would typically want to synchronize
         // this method as well. Because the answer is just a boolean that only
-        // goes from initial initial value (`false`) to `true` (and not back
+        // goes from initial value (`false`) to `true` (and not back
         // again), we can safely not synchronize this, and doing so substantially
         // speeds up the lookup if we add calls to `getAnswer()` to every step in
         // our threaded loops.
